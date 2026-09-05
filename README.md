@@ -1,5 +1,8 @@
 # Asvanta — Diagnostic Platform Demo
 
+**Live: <https://shivam30072.github.io/asvanta-demo/>** — works on desktop and mobile,
+no sign-in needed beyond the demo codes below.
+
 A **frontend-only prototype** for client walkthroughs. It shows the whole journey of a
 study — authorization → registration → large-file upload → reporting → secure delivery to
 the patient — with no backend, no network calls and no real data.
@@ -17,6 +20,19 @@ npm run dev
 Opens on <http://localhost:5173>.
 
 To stop switching every time, make it the default once: `nvm alias default 20`.
+
+## Deploying
+
+The site is hosted free on GitHub Pages from the `gh-pages` branch of
+[shivam30072/asvanta-demo](https://github.com/shivam30072/asvanta-demo); `main` holds the
+source. To ship a change:
+
+```bash
+npm run deploy      # builds and pushes to gh-pages
+```
+
+Assets are served from `/asvanta-demo/`, so `npm run build` (root paths, for local preview
+or any root-domain host) and `npm run build:pages` (Pages subpath) are separate builds.
 
 ## Demo credentials
 
