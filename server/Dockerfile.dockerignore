@@ -1,0 +1,8 @@
+# BuildKit uses this file for server/Dockerfile (build context = repo root).
+**
+!engine/pyproject.toml
+!engine/README.md
+!engine/asvanta_cac/**
+!server/pyproject.toml
+!server/asvanta_gateway/**
+**/__pycache__

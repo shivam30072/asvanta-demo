@@ -3,7 +3,7 @@ import Shell from '../components/Shell'
 import { useStore } from '../store'
 import * as I from '../components/Icons'
 import { ModalityBadge, PriorityChip, SectionTitle, StatusChip } from '../components/ui'
-import ShareModal from '../components/ShareModal'
+import SendToMobileModal from '../components/SendToMobileModal'
 import { bytes, timeAgo } from '../lib/format'
 
 const Stat = ({ icon: Icon, label, value, sub, tone = 'brand', trend }) => {
@@ -48,7 +48,7 @@ const FlowStep = ({ n, icon: Icon, title, body, done }) => (
 )
 
 export default function Dashboard() {
-  const { state, navigate } = useStore()
+  const { state, navigate, user } = useStore()
   const [publishing, setPublishing] = useState(null)
   const studies = state.studies
 
@@ -65,11 +65,11 @@ export default function Dashboard() {
 
   return (
     <Shell
-      title={`Good morning, Priya`}
+      title={`Good morning, ${(user?.name || 'Priya').split(' ')[0]}`}
       subtitle={`${state.centre.name}`}
       actions={
-        <button onClick={() => navigate('new-study')} className="btn-primary btn-md">
-          <I.UserPlus size={16} /> <span className="hidden sm:inline">New study</span>
+        <button onClick={() => navigate('scanners')} className="btn-primary btn-md">
+          <I.Activity size={16} /> <span className="hidden sm:inline">Scanners &amp; incoming</span>
         </button>
       }
     >
@@ -162,9 +162,9 @@ export default function Dashboard() {
             <SectionTitle>Quick actions</SectionTitle>
             <div className="card p-2 space-y-1">
               {[
-                { icon: I.UserPlus, label: 'Register a new patient study', to: 'new-study' },
-                { icon: I.Upload, label: 'Upload images to a study', to: 'upload' },
-                { icon: I.Layers, label: 'Browse previous uploads', to: 'studies' },
+                { icon: I.Activity, label: 'Scans arriving from the machines', to: 'scanners' },
+                { icon: I.Layers, label: 'Browse studies and send to a mobile', to: 'studies' },
+                ...(state.live ? [] : [{ icon: I.Upload, label: 'Manual upload (no scanner link)', to: 'new-study' }]),
                 { icon: I.Send, label: 'Check what patients received', to: 'deliveries' },
               ].map((a) => (
                 <button
@@ -183,16 +183,16 @@ export default function Dashboard() {
           <div>
             <SectionTitle>How a study travels</SectionTitle>
             <div className="card p-5">
-              <FlowStep n={1} icon={I.UserPlus} title="Register" body="Patient and study details are saved; a study ID is issued." done />
-              <FlowStep n={2} icon={I.Upload} title="Upload" body="Images go straight from this browser into private storage." done />
+              <FlowStep n={1} icon={I.Activity} title="Scan" body="The machine sends the study straight to the PACS; patient details come from the scanner." done />
+              <FlowStep n={2} icon={I.Phone} title="Share images" body="Staff can send the images to any mobile number straight away." done />
               <FlowStep n={3} icon={I.Stethoscope} title="Report &amp; sign" body="The radiologist reads the study and signs. Nothing reaches the patient yet." done />
-              <FlowStep n={4} icon={I.Send} title="Publish" body="The centre reviews the signed report and releases it by WhatsApp, SMS and email." done />
+              <FlowStep n={4} icon={I.Send} title="Send report" body="Once signed, the report goes to any mobile number as an OTP-protected link." done />
               <FlowStep n={5} icon={I.Clock} title="Expire" body="Images are deleted automatically 365 days after upload." done />
             </div>
           </div>
         </div>
       </div>
-      {publishing && <ShareModal open onClose={() => setPublishing(null)} study={state.studies.find((x) => x.id === publishing.id) || publishing} />}
+      {publishing && <SendToMobileModal open defaultIncludeReport onClose={() => setPublishing(null)} study={state.studies.find((x) => x.id === publishing.id) || publishing} />}
     </Shell>
   )
 }

@@ -1,28 +1,86 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 import { CENTRE, NOTIFICATIONS, SEED_STUDIES, USERS } from './data/seed'
+import { api, isLive, getToken, setToken } from './live/api'
 
 const StoreCtx = createContext(null)
 
 const initialState = () => ({
+  live: isLive,
   authed: false,
   role: 'staff',
+  liveUser: null,
   centre: CENTRE,
   route: { name: 'dashboard', params: {} },
-  studies: SEED_STUDIES.map((s) => ({ ...s })),
-  notifications: NOTIFICATIONS.map((n) => ({ ...n })),
+  // live mode starts empty and fills from the gateway; the demo starts from seed data
+  studies: isLive ? [] : SEED_STUDIES.map((s) => ({ ...s })),
+  notifications: isLive ? [] : NOTIFICATIONS.map((n) => ({ ...n })),
   toasts: [],
   patientLinkStudyId: 'STD-24814', // which study the patient portal opens
 })
 
 let toastSeq = 0
 
+/**
+ * Merge a study from the gateway over the local copy. The series list, an
+ * in-progress (unapproved) CAC review and CPR verifications made in this session
+ * are local working state and survive a refresh.
+ */
+function mergeStudy(local, server) {
+  if (!local) return { ...server, cac: toLocalCac(server.cac) }
+  const keepCac = local.cac?.review && local.cac.review.status !== 'approved' ? local.cac : toLocalCac(server.cac) || local.cac
+  return { ...server, seriesList: server.seriesList || local.seriesList, cac: keepCac, cpr: { ...(server.cpr || {}), ...(local.cpr || {}) } }
+}
+
+/** The gateway stores the approved CAC record; the UI keeps { seriesId, review }. */
+function toLocalCac(c) {
+  if (!c) return null
+  if (c.review) return { seriesId: c.seriesId, review: c.review }
+  if (c.approved) {
+    const a = c.approved
+    return {
+      seriesId: c.seriesId,
+      review: {
+        status: 'approved',
+        approved: a,
+        summaryOnly: true,
+        lesions: [],
+        excluded: [],
+        removed: [],
+        audit: [{ at: a.approvedAt, user: a.approvedBy, action: 'Approved final score', detail: `${Math.round(a.totals.total)}`, delta: 0 }],
+        algorithm: { totals: { total: a.algorithmTotal }, kind: a.kind, engineVersion: a.engineVersion },
+      },
+    }
+  }
+  return null
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'login':
-      return { ...state, authed: true, role: action.role, route: { name: action.role === 'radiologist' ? 'worklist' : 'dashboard', params: {} } }
+      return {
+        ...state,
+        authed: true,
+        role: action.role,
+        liveUser: action.user || null,
+        route: { name: action.role === 'radiologist' ? 'worklist' : 'dashboard', params: {} },
+      }
 
     case 'logout':
-      return { ...initialState(), studies: state.studies, notifications: state.notifications }
+      return { ...initialState(), studies: state.live ? [] : state.studies, notifications: state.live ? [] : state.notifications }
+
+    case 'set-studies': {
+      // server copies win, except working state that only lives in this browser
+      const prev = new Map(state.studies.map((s) => [s.id, s]))
+      return { ...state, studies: action.studies.map((s) => mergeStudy(prev.get(s.id), s)) }
+    }
+
+    case 'put-study': {
+      const exists = state.studies.some((s) => s.id === action.study.id)
+      const studies = exists
+        ? state.studies.map((s) => (s.id === action.study.id ? mergeStudy(s, action.study) : s))
+        : [action.study, ...state.studies]
+      return { ...state, studies }
+    }
 
     case 'switch-role': {
       const home = action.role === 'radiologist' ? 'worklist' : action.role === 'patient' ? 'portal' : 'dashboard'
@@ -75,7 +133,7 @@ export function StoreProvider({ children }) {
     timers.current.push(h)
   }, [])
 
-  const api = useMemo(() => {
+  const storeApi = useMemo(() => {
     const navigate = (name, params) => dispatch({ type: 'navigate', name, params })
 
     const pushEvent = (studyId, text, kind, actor) =>
@@ -88,15 +146,52 @@ export function StoreProvider({ children }) {
         }),
       })
 
+    /* ------------------------------------------------ gateway (live mode) */
+
+    const loadStudies = async () => {
+      const studies = await api('/studies')
+      dispatch({ type: 'set-studies', studies })
+    }
+    const refreshStudy = async (id) => {
+      const study = await api(`/studies/${id}`)
+      dispatch({ type: 'put-study', study })
+      return study
+    }
+    const loadSeries = async (id) => {
+      const seriesList = await api(`/studies/${id}/series`)
+      dispatch({ type: 'update-study', id, updater: (s) => ({ ...s, seriesList }) })
+    }
+    const liveLogin = async (email, password) => {
+      const { token, user } = await api('/auth/login', { method: 'POST', body: { email, password } })
+      setToken(token)
+      dispatch({ type: 'login', role: user.role, user })
+      return user
+    }
+
+    const livePushEvent = (studyId, text, kind, actor) => {
+      pushEvent(studyId, text, kind, actor)
+      api(`/studies/${studyId}/events`, { method: 'POST', body: { text, kind } }).catch((e) => toast('Could not record event', 'error', e.message))
+    }
+
     return {
       state,
       dispatch,
       toast,
       navigate,
-      pushEvent,
-      user: USERS[state.role],
+      pushEvent: state.live ? livePushEvent : pushEvent,
+      user: state.liveUser || USERS[state.role],
+      live: state.live,
+      loadStudies,
+      refreshStudy,
+      loadSeries,
+      liveLogin,
       login: (role) => dispatch({ type: 'login', role }),
-      logout: () => dispatch({ type: 'logout' }),
+      logout: () => {
+        if (state.live) {
+          setToken(null)
+        }
+        dispatch({ type: 'logout' })
+      },
       switchRole: (role) => dispatch({ type: 'switch-role', role }),
       reset: () => dispatch({ type: 'reset' }),
       addStudy: (study) => dispatch({ type: 'add-study', study }),
@@ -108,7 +203,27 @@ export function StoreProvider({ children }) {
     }
   }, [state, toast])
 
-  return <StoreCtx.Provider value={api}>{children}</StoreCtx.Provider>
+  // live mode: resume a session, then keep the study list fresh so new scans appear
+  useEffect(() => {
+    if (!isLive || state.authed || !getToken()) return
+    api('/auth/me')
+      .then((user) => dispatch({ type: 'login', role: user.role, user }))
+      .catch(() => setToken(null))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isLive || !state.authed) return
+    let stop = false
+    const pull = () => storeApi.loadStudies().catch((e) => !stop && e.status === 401 && storeApi.logout())
+    pull()
+    const h = setInterval(pull, 10000)
+    return () => {
+      stop = true
+      clearInterval(h)
+    }
+  }, [state.authed]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <StoreCtx.Provider value={storeApi}>{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => {

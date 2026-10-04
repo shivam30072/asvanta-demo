@@ -54,8 +54,8 @@ export default function Studies() {
       title="Studies"
       subtitle={`${state.studies.length} studies · ${bytes(totalSize)} of imaging stored at this centre`}
       actions={
-        <button onClick={() => navigate('new-study')} className="btn-primary btn-md">
-          <I.UserPlus size={16} /> <span className="hidden sm:inline">New study</span>
+        <button onClick={() => navigate('scanners')} className="btn-outline btn-md">
+          <I.Activity size={16} /> <span className="hidden sm:inline">Scanners</span>
         </button>
       }
     >

@@ -1,0 +1,127 @@
+{
+  "description": "Hand-computed Agatston reference cases. Both the Python engine (engine/) and the browser engine (src/cac/agatston.js) must reproduce every expected value. Volumes are given directly in HU; voxels not covered by a box or pixel take the background value. Boxes are inclusive on both ends. Indices are [x, y, z] with z the axial slice.",
+  "rules": {
+    "thresholdHu": 130,
+    "minAreaMm2": 1.0,
+    "connectivity2d": 8,
+    "densityFactors": "130-199 -> 1, 200-299 -> 2, 300-399 -> 3, >=400 -> 4 (from the region's peak HU)",
+    "regionScore": "area_mm2 * factor * (sliceIncrementMm / 3)",
+    "lesionLinking": "qualifying regions on adjacent slices that share at least one (x, y) pixel belong to the same lesion"
+  },
+  "cases": [
+    {
+      "name": "empty",
+      "dims": [8, 8, 1],
+      "spacing": [0.5, 0.5, 3.0],
+      "background": 40,
+      "boxes": [],
+      "expected": { "total": 0, "regions": 0, "lesions": 0 }
+    },
+    {
+      "name": "single-region-factor-2",
+      "dims": [10, 10, 1],
+      "spacing": [0.5, 0.5, 3.0],
+      "background": 40,
+      "boxes": [{ "z": 0, "x0": 2, "y0": 2, "x1": 5, "y1": 5, "hu": 250 }],
+      "expected": { "total": 8, "regions": 1, "lesions": 1 }
+    },
+    {
+      "name": "threshold-is-inclusive-at-130",
+      "dims": [12, 12, 1],
+      "spacing": [0.5, 0.5, 3.0],
+      "background": 40,
+      "boxes": [
+        { "z": 0, "x0": 1, "y0": 1, "x1": 3, "y1": 3, "hu": 129 },
+        { "z": 0, "x0": 6, "y0": 6, "x1": 8, "y1": 8, "hu": 130 }
+      ],
+      "expected": { "total": 2.25, "regions": 1, "lesions": 1 }
+    },
+    {
+      "name": "density-factor-boundaries",
+      "dims": [40, 8, 1],
+      "spacing": [1.0, 1.0, 3.0],
+      "background": 40,
+      "boxes": [
+        { "z": 0, "x0": 1, "y0": 2, "x1": 2, "y1": 3, "hu": 199 },
+        { "z": 0, "x0": 5, "y0": 2, "x1": 6, "y1": 3, "hu": 200 },
+        { "z": 0, "x0": 9, "y0": 2, "x1": 10, "y1": 3, "hu": 299 },
+        { "z": 0, "x0": 13, "y0": 2, "x1": 14, "y1": 3, "hu": 300 },
+        { "z": 0, "x0": 17, "y0": 2, "x1": 18, "y1": 3, "hu": 399 },
+        { "z": 0, "x0": 21, "y0": 2, "x1": 22, "y1": 3, "hu": 400 },
+        { "z": 0, "x0": 25, "y0": 2, "x1": 26, "y1": 3, "hu": 1000 },
+        { "z": 0, "x0": 29, "y0": 2, "x1": 30, "y1": 3, "hu": 131 }
+      ],
+      "expected": { "total": 80, "regions": 8, "lesions": 8 }
+    },
+    {
+      "name": "minimum-area-1mm2",
+      "dims": [10, 10, 1],
+      "spacing": [0.5, 0.5, 3.0],
+      "background": 40,
+      "boxes": [{ "z": 0, "x0": 6, "y0": 6, "x1": 7, "y1": 7, "hu": 450 }],
+      "pixels": [
+        { "x": 1, "y": 1, "z": 0, "hu": 450 },
+        { "x": 2, "y": 1, "z": 0, "hu": 450 },
+        { "x": 1, "y": 2, "z": 0, "hu": 450 }
+      ],
+      "expected": { "total": 4, "regions": 1, "lesions": 1 }
+    },
+    {
+      "name": "diagonal-pixels-join-under-8-connectivity",
+      "dims": [8, 8, 1],
+      "spacing": [1.0, 1.0, 3.0],
+      "background": 40,
+      "boxes": [
+        { "z": 0, "x0": 1, "y0": 1, "x1": 2, "y1": 2, "hu": 150 },
+        { "z": 0, "x0": 3, "y0": 3, "x1": 4, "y1": 4, "hu": 350 }
+      ],
+      "expected": { "total": 24, "regions": 1, "lesions": 1 }
+    },
+    {
+      "name": "one-lesion-across-three-slices-weighted-per-slice",
+      "dims": [10, 10, 3],
+      "spacing": [0.5, 0.5, 3.0],
+      "background": 40,
+      "boxes": [
+        { "z": 0, "x0": 2, "y0": 2, "x1": 5, "y1": 5, "hu": 180 },
+        { "z": 1, "x0": 3, "y0": 3, "x1": 6, "y1": 6, "hu": 420 },
+        { "z": 2, "x0": 6, "y0": 6, "x1": 8, "y1": 8, "hu": 260 }
+      ],
+      "expected": { "total": 24.5, "regions": 3, "lesions": 1 }
+    },
+    {
+      "name": "non-overlapping-regions-on-adjacent-slices-are-separate-lesions",
+      "dims": [10, 10, 2],
+      "spacing": [1.0, 1.0, 3.0],
+      "background": 40,
+      "boxes": [
+        { "z": 0, "x0": 1, "y0": 1, "x1": 2, "y1": 2, "hu": 210 },
+        { "z": 1, "x0": 6, "y0": 6, "x1": 7, "y1": 7, "hu": 210 }
+      ],
+      "expected": { "total": 16, "regions": 2, "lesions": 2 }
+    },
+    {
+      "name": "slice-increment-1.5mm-scales-by-half",
+      "dims": [6, 6, 2],
+      "spacing": [1.0, 1.0, 1.5],
+      "background": 40,
+      "boxes": [
+        { "z": 0, "x0": 1, "y0": 1, "x1": 2, "y1": 2, "hu": 410 },
+        { "z": 1, "x0": 1, "y0": 1, "x1": 2, "y1": 2, "hu": 410 }
+      ],
+      "expected": { "total": 16, "regions": 2, "lesions": 1 }
+    },
+    {
+      "name": "isolated-noise-pixels-are-rejected",
+      "dims": [12, 12, 1],
+      "spacing": [0.7, 0.7, 3.0],
+      "background": 40,
+      "pixels": [
+        { "x": 1, "y": 1, "z": 0, "hu": 900 },
+        { "x": 5, "y": 3, "z": 0, "hu": 600 },
+        { "x": 9, "y": 9, "z": 0, "hu": 300 }
+      ],
+      "expected": { "total": 0, "regions": 0, "lesions": 0 }
+    }
+  ]
+}

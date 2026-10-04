@@ -5,11 +5,13 @@ import { REPORT_TEMPLATES } from '../data/seed'
 import * as I from '../components/Icons'
 import { EmptyState, Modal, ModalityBadge } from '../components/ui'
 import SeriesThumb from '../viewer/SeriesThumb'
-import { buildSeries } from '../viewer/series'
+import { buildSeries, isCardiac } from '../viewer/series'
+import { reportText } from '../cac/review'
+import { api } from '../live/api'
 import { bytes, dateTime } from '../lib/format'
 
 export default function ReportEditor() {
-  const { state, navigate, getStudy, updateStudy, pushEvent, notify, toast } = useStore()
+  const { state, navigate, getStudy, updateStudy, pushEvent, notify, toast, live, user, loadSeries, refreshStudy } = useStore()
   const study = getStudy(state.route.params.id) || state.studies.find((s) => s.status === 'uploaded' || s.status === 'reporting')
 
   const [findings, setFindings] = useState('')
@@ -20,8 +22,9 @@ export default function ReportEditor() {
 
   useEffect(() => {
     if (!study) return
-    setFindings(study.report?.findings || '')
-    setImpression(study.report?.impression || '')
+    if (study.source === 'pacs' && !study.seriesList) loadSeries(study.id).catch(() => {})
+    setFindings(study.report?.findings || study.draft?.findings || '')
+    setImpression(study.report?.impression || study.draft?.impression || '')
     if (study.status === 'uploaded') {
       updateStudy(study.id, (s) => ({ ...s, status: 'reporting' }))
       pushEvent(study.id, 'Study opened for reporting', 'report', 'Dr. Anil Mehta')
@@ -46,20 +49,42 @@ export default function ReportEditor() {
     toast(`Template applied: ${t.label}`, 'info', 'Edit the text before signing.')
   }
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
+    if (live) {
+      try {
+        await api(`/studies/${study.id}/report`, { method: 'PUT', body: { findings, impression } })
+      } catch (e) {
+        return toast('Could not save the draft', 'error', e.message)
+      }
+    }
     updateStudy(study.id, (s) => ({ ...s, draft: { findings, impression } }))
     setSavedAt(new Date().toISOString())
     toast('Draft saved', 'success', 'Only you can see this until it is signed.')
   }
 
-  const sign = () => {
+  const sign = async () => {
     setSigning(true)
+    if (live) {
+      try {
+        await api(`/studies/${study.id}/report`, { method: 'PUT', body: { findings: findings.trim(), impression: impression.trim() } })
+        await api(`/studies/${study.id}/report/sign`, { method: 'POST' })
+        await refreshStudy(study.id)
+        toast('Report signed', 'success', 'The centre can now send it to any mobile number.')
+        navigate('worklist')
+      } catch (e) {
+        toast('Could not sign the report', 'error', e.message)
+      } finally {
+        setSigning(false)
+        setConfirm(false)
+      }
+      return
+    }
     setTimeout(() => {
       const at = new Date().toISOString()
       updateStudy(study.id, (s) => ({
         ...s,
         status: 'ready',
-        report: { findings: findings.trim(), impression: impression.trim(), signedBy: 'Dr. Anil Mehta', signedAt: at },
+        report: { findings: findings.trim(), impression: impression.trim(), signedBy: user.name, signedAt: at },
       }))
       pushEvent(study.id, 'Report signed — released to the centre for publishing', 'sign', 'Dr. Anil Mehta')
       // the radiologist hands off here; the centre decides when the patient sees it
@@ -76,6 +101,18 @@ export default function ReportEditor() {
   }
 
   const series = study.images > 0 ? buildSeries(study) : []
+  const cac = study.cac?.review
+  const cacApproved = cac?.status === 'approved' ? cac.approved : null
+
+  // only an approved score can reach the report — never the algorithm's number
+  const insertCac = () => {
+    const text = reportText(cacApproved)
+    const placeholder = '[Insert the approved CAC result.]'
+    setFindings((f) => (f.includes(placeholder) ? f.replace(placeholder, text) : `${f.trim()}${f.trim() ? '\n\n' : ''}${text}`))
+    const score = Math.round(cacApproved.totals.total)
+    setImpression((i) => i.replace('Coronary artery calcium score ___ (CAC-DRS ___).', `Coronary artery calcium score ${score} (${cacApproved.category.code}, ${cacApproved.category.label.toLowerCase()}).`))
+    toast('Approved CAC result inserted', 'success', `Score ${score} — approved by ${cacApproved.approvedBy}.`)
+  }
 
   return (
     <Shell
@@ -147,6 +184,56 @@ export default function ReportEditor() {
               <button onClick={() => navigate('viewer', { id: study.id })} className="btn-primary btn-sm w-full mt-3">
                 <I.Eye size={14} /> Open diagnostic viewer
               </button>
+            </div>
+          )}
+
+          {(cac || isCardiac(study)) && (
+            <div className={`card p-4 ${cacApproved ? 'border-emerald-200' : cac ? 'border-amber-200' : ''}`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[13px] font-semibold text-slate-900">Coronary calcium (CAC)</p>
+                <span className={`chip ${cacApproved ? 'bg-emerald-50 text-emerald-700' : cac ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                  {cacApproved ? 'Approved' : cac ? 'Awaiting approval' : 'Not analysed'}
+                </span>
+              </div>
+              {cacApproved ? (
+                <>
+                  <p className="text-[28px] font-semibold text-slate-900 leading-none">{Math.round(cacApproved.totals.total)}</p>
+                  <p className="text-[12px] text-slate-500 mt-1">
+                    {cacApproved.category.code} · {cacApproved.category.label}
+                    {cacApproved.kind === 'opportunistic' ? ' · opportunistic estimate' : ''}
+                  </p>
+                  <p className="text-[12px] text-slate-600 mt-2 font-mono">
+                    LM {Math.round(cacApproved.totals.LM)} · LAD {Math.round(cacApproved.totals.LAD)} · LCX {Math.round(cacApproved.totals.LCX)} · RCA {Math.round(cacApproved.totals.RCA)}
+                  </p>
+                  <p className="text-[11.5px] text-slate-400 mt-2">
+                    Approved by {cacApproved.approvedBy} · {dateTime(cacApproved.approvedAt)} · algorithm {Math.round(cacApproved.algorithmTotal)} · {cacApproved.engineVersion}
+                  </p>
+                  <button onClick={insertCac} className="btn-primary btn-sm w-full mt-3">
+                    Insert into report
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-[12.5px] text-slate-600 leading-relaxed">
+                    {cac
+                      ? 'An algorithm result exists but has not been reviewed. Unverified scores are never available to the report.'
+                      : 'Run the CAC analysis in the viewer, review the lesions and approve the score to use it here.'}
+                  </p>
+                  <button onClick={() => navigate('viewer', { id: study.id, mode: 'cac' })} className="btn-outline btn-sm w-full mt-3">
+                    <I.Activity size={14} /> {cac ? 'Open CAC review' : 'Open CAC analysis'}
+                  </button>
+                </>
+              )}
+              {study.cpr && Object.keys(study.cpr).length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <p className="text-[11.5px] font-medium text-slate-500 mb-1">Verified CPR centerlines</p>
+                  {Object.entries(study.cpr).map(([v, c]) => (
+                    <p key={v} className="text-[12px] text-slate-600">
+                      {v}{c.stenosis != null ? ` — est. stenosis ${c.stenosis}%` : ''} <span className="text-slate-400">· {c.by}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -251,6 +338,7 @@ export default function ReportEditor() {
               'The centre is notified and decides when to publish it to the patient.',
               'Nothing is sent to the patient by this action.',
               'Any later change is recorded as an amendment, not an edit.',
+              ...(cac && !cacApproved ? ['The CAC analysis is not approved — no calcium score is included.'] : []),
             ].map((t) => (
               <li key={t} className="flex gap-2.5 text-[13px] text-slate-600">
                 <I.Check size={15} className="text-emerald-600 shrink-0 mt-0.5" />

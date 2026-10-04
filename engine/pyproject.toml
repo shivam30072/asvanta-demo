@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asvanta-cac"
+version = "1.0.0"
+description = "Deterministic Agatston coronary artery calcium scoring engine (radiologist-in-the-loop)"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pydicom",
+    "fastapi",
+    "uvicorn",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[tool.setuptools]
+packages = ["asvanta_cac"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

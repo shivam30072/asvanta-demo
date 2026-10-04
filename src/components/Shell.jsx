@@ -8,9 +8,9 @@ import { timeAgo } from '../lib/format'
 const NAV = {
   staff: [
     { name: 'dashboard', label: 'Dashboard', icon: I.Grid },
-    { name: 'new-study', label: 'New Study', icon: I.UserPlus },
-    { name: 'upload', label: 'Upload Images', icon: I.Upload },
     { name: 'studies', label: 'Studies', icon: I.Layers },
+    { name: 'scanners', label: 'Scanners', icon: I.Activity },
+    { name: 'new-study', label: 'Manual Upload', icon: I.Upload, demoOnly: true },
     { name: 'deliveries', label: 'Deliveries', icon: I.Send },
   ],
   radiologist: [
@@ -74,8 +74,8 @@ export function DemoBar() {
 
 function Sidebar() {
   const { state, navigate, logout } = useStore()
-  const items = NAV[state.role] || []
-  const user = USERS[state.role]
+  const items = (NAV[state.role] || []).filter((it) => !(state.live && it.demoOnly))
+  const user = state.liveUser || USERS[state.role]
 
   return (
     <aside className="w-[240px] shrink-0 bg-white border-r border-slate-200 flex-col hidden lg:flex">
@@ -195,7 +195,7 @@ function TopBar({ title, subtitle, actions }) {
 
 function BottomNav() {
   const { state, navigate } = useStore()
-  const items = NAV[state.role] || []
+  const items = (NAV[state.role] || []).filter((it) => !(state.live && it.demoOnly))
   return (
     <nav className="lg:hidden shrink-0 bg-white border-t border-slate-200 flex items-stretch pb-[env(safe-area-inset-bottom)]">
       {items.map((it) => {
@@ -217,10 +217,25 @@ function BottomNav() {
   )
 }
 
+/** Live mode: who is signed in and which PACS the app is reading from, instead of the demo switcher. */
+function LiveBar() {
+  const { user } = useStore()
+  return (
+    <div className="h-9 shrink-0 bg-slate-900 text-white flex items-center gap-3 px-4 sm:px-6 text-[12px]">
+      <span className="flex items-center gap-1.5 text-emerald-300">
+        <span className="h-2 w-2 rounded-full bg-emerald-400" /> Connected to PACS
+      </span>
+      <span className="text-slate-400 hidden sm:inline">Scans arrive from the scanners automatically</span>
+      <span className="ml-auto text-slate-300">{user?.name} · {user?.role === 'radiologist' ? 'Radiologist' : 'Centre staff'}</span>
+    </div>
+  )
+}
+
 export default function Shell({ title, subtitle, actions, children, wide }) {
+  const { live } = useStore()
   return (
     <div className="h-screen flex flex-col bg-slate-50">
-      <DemoBar />
+      {live ? <LiveBar /> : <DemoBar />}
       <div className="flex-1 flex min-h-0">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">

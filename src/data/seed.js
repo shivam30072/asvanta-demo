@@ -86,7 +86,7 @@ export const RADIOLOGISTS = [
 export const suggestRadiologist = (modality, bodyPart = '') => {
   const b = bodyPart.toLowerCase()
   if (modality === 'Mammography' || modality === 'Ultrasound') return RADIOLOGISTS[3]
-  if (b.includes('chest') || b.includes('lung') || b.includes('thorax')) return RADIOLOGISTS[2]
+  if (b.includes('chest') || b.includes('lung') || b.includes('thorax') || b.includes('cardiac')) return RADIOLOGISTS[2]
   if (b.includes('spine') || b.includes('knee') || b.includes('shoulder')) return RADIOLOGISTS[1]
   return RADIOLOGISTS[0]
 }
@@ -94,7 +94,7 @@ export const suggestRadiologist = (modality, bodyPart = '') => {
 export const MODALITIES = ['CT', 'MRI', 'X-Ray', 'Ultrasound', 'Mammography', 'PET-CT']
 
 export const BODY_PARTS = {
-  CT: ['Brain', 'Chest', 'Abdomen + Pelvis', 'KUB', 'Spine'],
+  CT: ['Brain', 'Chest', 'Cardiac (Calcium score + CTA)', 'Abdomen + Pelvis', 'KUB', 'Spine'],
   MRI: ['Brain', 'Lumbar Spine', 'Knee', 'Shoulder', 'Whole Abdomen'],
   'X-Ray': ['Chest PA', 'Knee AP/LAT', 'Cervical Spine', 'Pelvis'],
   Ultrasound: ['Whole Abdomen', 'Pelvis', 'Obstetric', 'Thyroid'],
@@ -117,6 +117,28 @@ const ago = (d, h = 0) => new Date(now - d * day - h * 3600000).toISOString()
 const mkTimeline = (entries) => entries.map((e, i) => ({ id: `ev_${i}`, ...e }))
 
 export const SEED_STUDIES = [
+  {
+    id: 'STD-24818',
+    patient: { name: 'Vikram Malhotra', id: 'PT-10251', age: 58, gender: 'M', phone: '+91 98190 33417', email: 'vikram.malhotra@gmail.com' },
+    modality: 'CT',
+    bodyPart: 'Cardiac (Calcium score + CTA)',
+    referredBy: 'Dr. M. Patel (Physician)',
+    priority: 'Routine',
+    assignedTo: 'rad_mehta',
+    status: 'uploaded',
+    notes: 'Atypical chest pain, smoker, family history of CAD. Calcium score and coronary CTA requested.',
+    createdAt: ago(0, 1),
+    receivedFrom: { aeTitle: 'CT_ROOM1', ip: '192.168.1.41' },
+    files: [],
+    sizeBytes: 402653184,
+    images: 176,
+    report: null,
+    shares: [],
+    timeline: mkTimeline([
+      { at: ago(0, 1), actor: 'CT_ROOM1', text: 'Received from CT_ROOM1 (192.168.1.41) — 176 images in 3 series', kind: 'upload' },
+      { at: ago(0, 1), actor: 'System', text: 'Study complete — queued for Dr. Anil Mehta', kind: 'db' },
+    ]),
+  },
   {
     id: 'STD-24816',
     patient: { name: 'Deepak Chauhan', id: 'PT-10244', age: 52, gender: 'M', phone: '+91 98204 71130', email: 'deepak.chauhan@gmail.com' },
@@ -157,6 +179,7 @@ export const SEED_STUDIES = [
     assignedTo: 'rad_mehta',
     status: 'reporting',
     createdAt: ago(0, 3),
+    receivedFrom: { aeTitle: 'MRI_1_5T', ip: '192.168.1.42' },
     files: [
       { name: 'MRI_LSPINE_SERIES1.dcm.zip', size: 268435456, parts: 4 },
       { name: 'MRI_LSPINE_SERIES2.dcm.zip', size: 201326592, parts: 3 },
@@ -316,6 +339,14 @@ export const SEED_STUDIES = [
 
 export const REPORT_TEMPLATES = [
   {
+    id: 'tpl_ct_cac',
+    label: 'CT Calcium Score + Coronary CTA',
+    modality: 'CT',
+    findings:
+      'ECG-gated non-contrast CT for coronary calcium scoring, followed by contrast-enhanced coronary CT angiography. Coronary dominance: right. [Insert the approved CAC result.] Left main: no significant stenosis. LAD: ___. LCX: ___. RCA: ___. Cardiac chambers are normal in size. No pericardial effusion. Visualised lung bases are clear.',
+    impression: 'Coronary artery calcium score ___ (CAC-DRS ___). ___',
+  },
+  {
     id: 'tpl_normal_ct_brain',
     label: 'CT Brain — Normal',
     modality: 'CT',
@@ -371,4 +402,13 @@ export const NOTIFICATIONS = [
   { id: 'n2', title: 'Report published', body: 'STD-24814 sent to the patient — WhatsApp message has been read.', at: ago(0, 4), unread: true, kind: 'share' },
   { id: 'n3', title: 'Upload complete', body: '448 MB in 2 files stored for STD-24815 — Rahul Verma.', at: ago(0, 2), unread: false, kind: 'upload' },
   { id: 'n4', title: 'Retention notice', body: '3 studies from last year expire in under 30 days.', at: ago(1), unread: false, kind: 'clock' },
+]
+
+/** The PACS endpoint scanners send to, and the machines registered with it (demo values). */
+export const PACS = { aeTitle: 'ASVANTA', host: '192.168.1.20', port: 4242 }
+
+export const SCANNERS = [
+  { name: 'CT_ROOM1', aeTitle: 'CT_ROOM1', host: '192.168.1.41', port: 104, modality: 'CT', model: 'Siemens SOMATOM go.Top', lastSeen: ago(0, 1) },
+  { name: 'MRI_1_5T', aeTitle: 'MRI_1_5T', host: '192.168.1.42', port: 104, modality: 'MRI', model: 'GE SIGNA Explorer', lastSeen: ago(0, 2) },
+  { name: 'DR_ROOM2', aeTitle: 'DR_ROOM2', host: '192.168.1.45', port: 104, modality: 'X-Ray', model: 'Fujifilm FDR Smart X', lastSeen: ago(1) },
 ]

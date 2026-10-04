@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asvanta-gateway"
+version = "0.1.0"
+description = "AsvantaTech PACS gateway: auth, worklist, reports, OTP-protected sharing and a DICOMweb proxy in front of Orthanc"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic>=2",
+    "pynetdicom",
+    "pydicom",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "respx"]
+
+[tool.setuptools]
+packages = ["asvanta_gateway"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs a live Orthanc (set ORTHANC_URL)"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

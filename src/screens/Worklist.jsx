@@ -6,39 +6,40 @@ import { Avatar, EmptyState, ModalityBadge, PriorityChip, StatusChip } from '../
 import { RADIOLOGISTS } from '../data/seed'
 import { bytes, timeAgo } from '../lib/format'
 
-const ME = 'rad_mehta' // the signed-in radiologist in this demo
+const DEMO_ME = 'rad_mehta' // the demo's radiologist; live mode uses the signed-in user's id
 const unread = (s) => s.status === 'uploaded' || s.status === 'reporting'
 
 const QUEUES = [
-  { key: 'mine', label: 'Assigned to me', match: (s) => unread(s) && s.assignedTo === ME },
+  { key: 'mine', label: 'Assigned to me', match: (s, me) => unread(s) && s.assignedTo === me },
   { key: 'pending', label: 'All unreported', match: unread },
   { key: 'signed', label: 'Signed by me', match: (s) => s.status === 'ready' || s.status === 'shared' },
   { key: 'all', label: 'All studies', match: () => true },
 ]
 
 export default function Worklist() {
-  const { state, navigate } = useStore()
+  const { state, navigate, user } = useStore()
+  const ME = user?.radiologistId || DEMO_ME
   const [queue, setQueue] = useState('mine')
   const [q, setQ] = useState('')
 
   const rows = useMemo(() => {
     const match = QUEUES.find((x) => x.key === queue).match
     return state.studies
-      .filter(match)
+      .filter((s) => match(s, ME))
       .filter((s) => (q ? `${s.patient.name} ${s.id} ${s.modality} ${s.bodyPart}`.toLowerCase().includes(q.toLowerCase()) : true))
       .sort((a, b) => {
         if (a.priority !== b.priority) return a.priority === 'Urgent' ? -1 : 1
         return new Date(a.createdAt) - new Date(b.createdAt)
       })
-  }, [state.studies, queue, q])
+  }, [state.studies, queue, q, ME])
 
   const counts = useMemo(
     () => ({
-      mine: state.studies.filter(QUEUES[0].match).length,
-      urgent: state.studies.filter((s) => QUEUES[0].match(s) && s.priority === 'Urgent').length,
-      signed: state.studies.filter(QUEUES[2].match).length,
+      mine: state.studies.filter((s) => QUEUES[0].match(s, ME)).length,
+      urgent: state.studies.filter((s) => QUEUES[0].match(s, ME) && s.priority === 'Urgent').length,
+      signed: state.studies.filter((s) => QUEUES[2].match(s, ME)).length,
     }),
-    [state.studies]
+    [state.studies, ME]
   )
 
   return (

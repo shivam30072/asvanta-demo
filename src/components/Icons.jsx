@@ -74,3 +74,7 @@ export const Pencil = (p) => <Svg {...p}><path d="M4 20h4L20 8a2.5 2.5 0 00-3.5-
 export const Link = (p) => <Svg {...p}><path d="M10.5 13.5a4 4 0 005.7 0l2.8-2.8a4 4 0 00-5.7-5.7l-1.3 1.3"/><path d="M13.5 10.5a4 4 0 00-5.7 0l-2.8 2.8a4 4 0 005.7 5.7l1.3-1.3"/></Svg>
 export const Copy = (p) => <Svg {...p}><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M6 15H5a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1"/></Svg>
 export const Sparkle = (p) => <Svg {...p}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z"/></Svg>
+export const Crosshair = (p) => <Svg {...p}><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></Svg>
+export const Cube = (p) => <Svg {...p}><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></Svg>
+export const Curve = (p) => <Svg {...p}><path d="M4 19c4 0 3-7 8-7s4-7 8-7"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="5" r="1.5"/></Svg>
+export const Heart = (p) => <Svg {...p}><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/></Svg>

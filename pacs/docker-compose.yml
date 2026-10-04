@@ -1,0 +1,92 @@
+# Asvanta PACS: Orthanc (DICOM store) + FastAPI gateway.
+#   - DICOM C-STORE from scanners  -> host TCP 4242 (open it only to the modality VLAN)
+#   - Orthanc REST/DICOMweb 8042   -> internal network only (127.0.0.1 on the host for debugging)
+#   - Gateway API 8000             -> put TLS in front of it in production
+name: asvanta-pacs
+
+services:
+  orthanc:
+    image: orthancteam/orthanc:24.10.3
+    restart: unless-stopped
+    ports:
+      - "${ORTHANC_DICOM_BIND:-0.0.0.0}:${ORTHANC_DICOM_PORT:-4242}:4242"
+      - "127.0.0.1:${ORTHANC_HTTP_DEBUG_PORT:-8042}:8042"   # debugging only, never public
+    environment:
+      ORTHANC__NAME: "Asvanta PACS"
+      ORTHANC__DICOM_AET: "${ORTHANC_AET:-ASVANTA}"
+      ORTHANC__DICOM_PORT: "4242"
+      ORTHANC__HTTP_PORT: "8042"
+      ORTHANC__DICOM_CHECK_CALLED_AET: "true"
+      # only modalities registered via the gateway (/api/pacs/scanners) may C-STORE
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "${ORTHANC_ACCEPT_UNKNOWN:-false}"
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "true"
+      ORTHANC__DICOM_CHECK_MODALITY_HOST: "${ORTHANC_CHECK_MODALITY_HOST:-false}"
+      ORTHANC__DICOM_MODALITIES_IN_DATABASE: "true"
+      ORTHANC__STABLE_AGE: "10"
+      ORTHANC__OVERWRITE_INSTANCES: "true"
+      ORTHANC__STORAGE_COMPRESSION: "false"
+      ORTHANC__REMOTE_ACCESS_ALLOWED: "true"
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: '{"${ORTHANC_USER:-gateway}": "${ORTHANC_PASSWORD:?set ORTHANC_PASSWORD in .env}"}'
+      DICOM_WEB_PLUGIN_ENABLED: "true"
+      ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
+      ORTHANC__DICOM_WEB__ENABLE_WADO: "false"
+      VERBOSE_ENABLED: "${ORTHANC_VERBOSE:-false}"
+    volumes:
+      - orthanc-storage:/var/lib/orthanc/db
+    networks: [pacs]
+    healthcheck:
+      test: ["CMD", "/probes/test-aliveness.py"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: asvanta/gateway:dev
+    restart: unless-stopped
+    depends_on:
+      orthanc:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_BIND:-0.0.0.0}:${GATEWAY_PORT:-8000}:8000"
+    environment:
+      ORTHANC_URL: "http://orthanc:8042"
+      ORTHANC_USER: "${ORTHANC_USER:-gateway}"
+      ORTHANC_PASSWORD: "${ORTHANC_PASSWORD}"
+      ORTHANC_AET: "${ORTHANC_AET:-ASVANTA}"
+      ORTHANC_DICOM_PORT: "${ORTHANC_DICOM_PORT:-4242}"
+      PACS_PUBLIC_HOST: "${PACS_PUBLIC_HOST:-}"
+      DB_PATH: "/data/gateway.db"
+      DEMO_PASSWORD: "${DEMO_PASSWORD:-asvanta}"
+      SESSION_HOURS: "${SESSION_HOURS:-12}"
+      CENTRE_NAME: "${CENTRE_NAME:-Asvanta Diagnostics}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:5173}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173,http://localhost:5179}"
+      SMS_PROVIDER: "${SMS_PROVIDER:-console}"
+      MSG91_AUTH_KEY: "${MSG91_AUTH_KEY:-}"
+      MSG91_TEMPLATE_ID: "${MSG91_TEMPLATE_ID:-}"
+      MSG91_SENDER: "${MSG91_SENDER:-}"
+      TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
+      TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN:-}"
+      TWILIO_FROM: "${TWILIO_FROM:-}"
+      INGEST_INTERVAL: "${INGEST_INTERVAL:-3}"
+    volumes:
+      - gateway-data:/data
+    networks: [pacs]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  orthanc-storage:
+  gateway-data:
+
+networks:
+  pacs:

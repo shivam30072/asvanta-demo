@@ -6,16 +6,16 @@ import * as I from '../components/Icons'
 const DEMO_OTP = '482913'
 
 const ACCOUNTS = [
-  { role: 'staff', label: 'Centre Staff', hint: 'Registers patients, uploads studies' },
+  { role: 'staff', label: 'Centre Staff', hint: 'Receives scans from machines, shares studies' },
   { role: 'radiologist', label: 'Radiologist', hint: 'Reads studies, signs reports' },
 ]
 
 export default function Login() {
-  const { login, toast, switchRole } = useStore()
+  const { login, toast, switchRole, live, liveLogin } = useStore()
   const [step, setStep] = useState('credentials') // credentials | otp | centre
   const [role, setRole] = useState('staff')
   const [email, setEmail] = useState(USERS.staff.email)
-  const [password, setPassword] = useState('demo1234')
+  const [password, setPassword] = useState(live ? '' : 'demo1234')
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -37,6 +37,16 @@ export default function Login() {
     setError('')
     if (!email || password.length < 4) return setError('Enter your email and password to continue.')
     setBusy(true)
+    if (live) {
+      // the gateway checks the password; there is no simulated OTP step against a real server
+      liveLogin(email, password)
+        .then((u) => toast(`Signed in as ${u.name}`, 'success', CENTRE.name))
+        .catch((err) => {
+          setBusy(false)
+          setError(err.status === 401 ? 'Email or password is incorrect.' : `Could not reach the server: ${err.message}`)
+        })
+      return
+    }
     setTimeout(() => {
       setBusy(false)
       setStep('otp')
